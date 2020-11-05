@@ -40,7 +40,13 @@ source("age_structure.r")
 #####################################
 
 covid <- data.frame(read.csv("covidtesting.csv"))[seq(5, 272, 7),c(1, 6:8)]
-d <- ggplot(covid, aes(x=Reported.Date, y=Total.Cases-lag(Total.Cases)))+
+age.specific <- read.csv("conposcovidloc.csv")
+age.categ.inc <-age.specific %>%
+  group_by(Age_Group, Case_Reported_Date)%>%
+  summarise(n=n())%>%
+  pivot_wider(names_from = Age_Group, values_from= )
+  
+d <- ggplot(covid, aes(x=Reported.Date, y=Total.Cases))+
   geom_point() 
 d
 
@@ -79,95 +85,7 @@ pred.traj <- pivot_longer(model.pred, cols=-time, names_to="state", values_to="v
 ss<- d+
   geom_line(data=subset(pred.traj, state=="Inc"), aes(x=time, y=value)); ss
 
-################################
-### Latin Hypercube Sampling ###
-################################
 
-### set up latin hypercube sample ###
-h <- 2000 #choose the number of points to sample
-lhs <- maximinLHS(h,2) #draw 'h' samples from uniform dist'n U(0,1) using LH design
-
-### rescale sample based on prior estimates for each parameter ###
-R0.min <- 1  # define minimum and maximum values for each of the parameters
-R0.max <- 3
-dur.inf.min <- 1/7
-dur.inf.max <- 3
-## create a parameter set by rescaling our simulated latin hypercube sample
-params.set = cbind(R0=lhs[,1]*(R0.max-R0.min)+R0.min,
-                   dur.inf=lhs[,2]*(dur.inf.max-dur.inf.min)+dur.inf.min)
-
-### run the model for each LHS parameter set and save calibration targets to a data frame ###
-
-lhs.data <- data.frame(matrix(rep(NA,h*5),nrow=h))
-for(i in 1:h){
-  params <- (params.set[i,])   #select the parameters to use for a particular model run
-  times=flu[,"time"]
-  out <- as.data.frame(ode(init.state, times, sir.model, 
-                           params, method='euler')) #run the model
-  peak<-max(diff(out$Inc))  #maximum number of cases that occur during the outbreak
-  cum.inc <- out$Inc[max(times)]  #total number of cases that occur over the time period
-  peak.week <-which.max(diff(out$Inc)) #week with the largest number of cases
-  lhs.data[i, 1:2]<-params[1:2]
-  lhs.data[i,3] <- peak
-  lhs.data[i,4] <-cum.inc
-  lhs.data[i,5] <-peak.week
-}
-names(lhs.data) <- c(names(params), 'peak', 'cum.inc', 'peak.week')  #data set with param values and model outputs
-
-### calculate calibration targets from the flu data set we're using for fitting ###
-
-peak.data <- max(flu$obs)  # maximum number of cases reported in the data set
-cum.inc.data <- sum(flu$obs) # cumulative cases reported in the data set
-peak.week.data <- which.max(flu$obs) #week with highest case reports
-
-### define the acceptable target ranges and select parameter sets that fall within these ranges ###
-
-peak.min <- peak.data*0.8
-peak.max <- peak.data*1.2
-cum.inc.min <- cum.inc.data*0.8
-cum.inc.max <- cum.inc.data*1.2
-peak.week.min <- peak.week.data-3
-peak.week.max <- peak.week.data + 3
-
-lhs.data$isFittingData=0
-## select parameter sets that result in outputs that fall within specified calibration targets 
-lhs.data[(lhs.data$peak>=peak.min) & (lhs.data$peak<=peak.max) & 
-           (lhs.data$cum.inc>=cum.inc.min) & (lhs.data$cum.inc<=cum.inc.max) &   
-           (lhs.data$peak.week>=peak.week.min) & (lhs.data$peak.week<=peak.week.max) & 
-           !is.na(lhs.data$peak | lhs.data$cum.inc),]$isFittingData=1
-
-table(lhs.data$isFittingData) #list of param sets that fit the data
-
-### plot parameter priors and posteriors ###
-
-par(mfrow=c(1,2))
-boxplot(lhs.data$R0,subset(lhs.data,isFittingData==1)$R0,col=c(grey(0.6),2),
-        names=c("Prior","Posterior"), main="LHS for 'R0':\nprior/posteriors distributions")
-
-boxplot(lhs.data$dur.inf,subset(lhs.data,isFittingData==1)$dur.inf,col=c(grey(0.6),2),
-        names=c("Prior","Posterior"), main="LHS for 'Infection duration (weeks)':
-      \nprior/posteriors distributions")
-
-
-### plot the epidemic trajectories for accepted parameter sets and compare to data ###
-
-lhs.params=subset(lhs.data,isFittingData==1)
-
-lhs.out <- data.frame(matrix(rep(NA,nrow(flu)*nrow(lhs.params)),nrow=nrow(flu)))
-for(i in 1:nrow(lhs.params)){   #run the model for the selected parameter sets
-  params <- unlist((lhs.params[i,1:2]))
-  out <- as.data.frame(ode(init.state, times=flu[,"time"], sir.model, params, method='euler'))
-  out <- mutate(out, Inc=c(0,diff(Inc)))
-  lhs.out[, i]<-out$Inc
-}  
-
-
-pred.traj <- lhs.out %>%
-  mutate(time = row_number()) %>%
-  pivot_longer(cols=-time, values_to="value", names_to = "run")
-
-
-lhs.plot<- d+
   geom_line(data=pred.traj, aes(x=time, y=value, group=run), color="grey"); lhs.plot
 
 #####################################
