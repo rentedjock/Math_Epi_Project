@@ -4,7 +4,7 @@ library(deSolve)
 library(socialmixr)
 
 # Age structure model
-
+##
 sir.model <- function (times, x, parms) { #SIR model equations
   
   S <- x[sindex]

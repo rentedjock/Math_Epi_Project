@@ -202,7 +202,7 @@ prediction <- function(params, times) {
 } 
 
 ### set up likelihood function ###
-
+##
 poisson.loglik <- function(params, data) {
   times <- data$time
   pred <- prediction(params, times)
