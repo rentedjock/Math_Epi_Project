@@ -31,7 +31,7 @@ require(bbmle)
 ########################
 
 ### model equations ###
-source("Agestructure.r")
+source("age_structure.r")
 
 
 
@@ -39,10 +39,10 @@ source("Agestructure.r")
 ### input data to use for fitting ###
 #####################################
 
-flu <- data.frame(read.delim("outbreak.txt"))
-d <- ggplot(flu, aes(x=time, y=obs))+
-  geom_point() +
-  labs(x="Time (weeks)", y="Reported cases"); d
+covid <- data.frame(read.csv("covidtesting.csv"))[seq(5, 272, 7),c(1, 6:8)]
+d <- ggplot(covid, aes(x=Reported.Date, y=Total.Cases-lag(Total.Cases)))+
+  geom_point() 
+d
 
 #############################
 ### Least squares fitting ###

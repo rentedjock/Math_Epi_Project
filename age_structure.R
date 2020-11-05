@@ -8,6 +8,8 @@ library(socialmixr)
 sir.model <- function (times, x, parms) { #SIR model equations
   
   S <- x[sindex]
+  
+  E <- x[eindex]
   I <- x[iindex]
   R <- x[rindex]
   Inc <-x[incindex]
@@ -20,14 +22,19 @@ sir.model <- function (times, x, parms) { #SIR model equations
   births <- parms[["births"]]
   mu <- diag(parms[["mu"]])
   
+  if (times %in% 20:30) {beta <- beta *0.5}
+  
+  sigma <- 1/parms[["latent"]]
+  
   lambda <-  beta %*% (I/N)
   
   dS <- -lambda*S + aging%*%S + births%*%N
-  dI <- lambda*S - gamma*I + aging%*%I -mu%*%I
+  dE <- aging %*%E + lambda*S -sigma*E
+  dI <- sigma*E - gamma*I + aging%*%I -mu%*%I
   dR <- gamma*I + aging%*%R
   dInc <- lambda*S
   dD <- mu%*%I
-  return(list(c(dS, dI, dR, dInc, dD)))
+  return(list(c(dS,dE,  dI, dR, dInc, dD)))
 }
 
 #Next we need to define the starting conditions and parameters:
@@ -35,7 +42,8 @@ sir.model <- function (times, x, parms) { #SIR model equations
 #state.names <-c("S", "I", "R", "Inc")
 n.i <- 4 # number of age groups
 sindex <- 1:n.i  #these indices help sort out what's saved where
-iindex <- seq(from=max(sindex)+1, by=1, length.out=n.i)
+eindex <- seq(from=max(sindex)+1, by=1, length.out=n.i)
+iindex <- seq(from=max(eindex)+1, by=1, length.out=n.i)
 rindex <- seq(from=max(iindex)+1, by=1, length.out=n.i)
 incindex <- seq(from=max(rindex)+1, by=1, length.out=n.i)
 dindex <- seq(from=max(incindex)+1, by=1, length.out=n.i)
@@ -53,30 +61,39 @@ p <- 0.1 # probability of transmission given contact
 times <- 1:39 # time step is in weeks
 dur.inf <- 10 # in days
 mu <-1/30*( c(0.0001, 0.001, 0.03, 0.1))
+latent <- 10 # in days
+sdbreaks <- 1
+social.distancing <- data.frame (begin.time =c(10),
+                                end.time =c(20),
+                                decrease =c(0.5)
+                                )##social distancing
+
 theta <- list(dur.inf = dur.inf, 
               births = births, 
               aging = aging, 
               c = c, 
               p = p, 
-              mu=mu)
+              mu=mu, 
+              latent =latent, 
+              social.distancing = social.distancing)
 
 pop.init <- 1e6*(ages/sum(ages))
 init.inf <- 1
 rec.init <-0
 yinit <- c(
   S = pop.init - init.inf, 
-  I = rep(init.inf, n.i), 
+  E= rep(init.inf, n.i),
+  I = rep(0, n.i), 
   R = rep(0, n.i),
   Inc = rep(0, n.i),
   D= rep(0, n.i)
 )
 
 
-
 traj <- as.data.frame(ode(y=yinit, times=times, func=sir.model,
                           parms=theta, method="rk4"))
 
-#Plot the model outputs:
+
 #removing negative values from traj
 k <-1  
 for (j in 2:nrow(traj)) {
@@ -87,7 +104,7 @@ for (j in 2:nrow(traj)) {
 
 traj <- traj[1:k,] 
 
-
+#Plot the model outputs:
 traj%>%
   mutate_at(vars(contains("inc")), function(x) x - lag(x)) %>%
   gather(key="group", value="values", -c(time), na.rm = T) %>%
