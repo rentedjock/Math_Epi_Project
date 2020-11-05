@@ -16,14 +16,21 @@ sir.model <- function (times, x, parms) { #SIR model equations
   D <- x[dindex]
   N <- S + I + R-D
   
+  
+  
   beta <- parms[["p"]]*parms[["c"]] #beta = p*c
   gamma <- 1/parms[["dur.inf"]] #gamma = 1/dur.inf
   aging <- parms[["aging"]]
   births <- parms[["births"]]
   mu <- diag(parms[["mu"]])
+  for(j in 1: length(social.distancing)){
+    
+    
+  if (times %in% sdbreaks[j]:sdbreaks[j+1]) {
+    beta <- beta *social.distancing[j]
+    }
   
-  if (times %in% 20:30) {beta <- beta *0.5}
-  
+   }
   sigma <- 1/parms[["latent"]]
   
   lambda <-  beta %*% (I/N)
@@ -62,20 +69,16 @@ times <- 1:39 # time step is in weeks
 dur.inf <- 10 # in days
 mu <-1/30*( c(0.0001, 0.001, 0.03, 0.1))
 latent <- 10 # in days
-sdbreaks <- 1
-social.distancing <- data.frame (begin.time =c(10),
-                                end.time =c(20),
-                                decrease =c(0.5)
-                                )##social distancing
-
+sdbreaks <- c(1, 20, 30, max(times))
+social.distancing <- c(1, 0.5, 1)
+  
 theta <- list(dur.inf = dur.inf, 
               births = births, 
               aging = aging, 
               c = c, 
               p = p, 
               mu=mu, 
-              latent =latent, 
-              social.distancing = social.distancing)
+              latent =latent)
 
 pop.init <- 1e6*(ages/sum(ages))
 init.inf <- 1
