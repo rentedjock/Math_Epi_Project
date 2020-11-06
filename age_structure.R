@@ -14,6 +14,7 @@ sir.model <- function (times, x, parms) { #SIR model equations
   R <- x[rindex]
   Inc <-x[incindex]
   D <- x[dindex]
+  
   N <- S + I + R-D
   
   
@@ -23,54 +24,89 @@ sir.model <- function (times, x, parms) { #SIR model equations
   aging <- parms[["aging"]]
   births <- parms[["births"]]
   mu <- diag(parms[["mu"]])
-  for(j in 1: length(social.distancing)){
-    
-    
-  if (times %in% sdbreaks[j]:sdbreaks[j+1]) {
-    beta <- beta *social.distancing[j]
-    }
   
-   }
+  #social distancing
+for(j in 1: length(social.distancing)){
+  
+    
+if (times %in% sdbreaks[j]:sdbreaks[j+1]) {
+   beta <- beta *social.distancing[j]
+  }
+  
+}
+  
+  
   sigma <- 1/parms[["latent"]]
   
   lambda <-  beta %*% (I/N)
   
-  dS <- -lambda*S + aging%*%S + births%*%N
+  #By 10 age groups
+  dS <- -lambda*S + aging%*%S + births%*%N- rho*S
   dE <- aging %*%E + lambda*S -sigma*E
   dI <- sigma*E - gamma*I + aging%*%I -mu%*%I
-  dR <- gamma*I + aging%*%R
+  dR <- gamma*I + aging%*%R +rho*S
   dInc <- lambda*S
   dD <- mu%*%I
-  return(list(c(dS,dE,  dI, dR, dInc, dD)))
+  
+  
+
+  
+  return(list(c(dS,dE,  dI, dR, dInc, dD   ) ) )
 }
 
 #Next we need to define the starting conditions and parameters:
 
 #state.names <-c("S", "I", "R", "Inc")
-n.i <- 4 # number of age groups
+
+# numebr of age groups
+n.i <- 10 # number of age groups
+
+#indices
 sindex <- 1:n.i  #these indices help sort out what's saved where
 eindex <- seq(from=max(sindex)+1, by=1, length.out=n.i)
 iindex <- seq(from=max(eindex)+1, by=1, length.out=n.i)
 rindex <- seq(from=max(iindex)+1, by=1, length.out=n.i)
 incindex <- seq(from=max(rindex)+1, by=1, length.out=n.i)
 dindex <- seq(from=max(incindex)+1, by=1, length.out=n.i)
-age.categories <- c(0,5, 20, 60)
-ages <- c(5,20, 40, 30)
+
+#age categories, births, ageing
+age.categories <- seq(0, 90, 10)
+
+ages <- rep(10, 10)
 aging <- diag(-1/ages)
 aging[row(aging)-col(aging)==1] <- 1/head(ages,-1)
 births <- matrix(0, nrow=n.i, ncol=n.i)
 births[1, n.i] <- -aging[n.i, n.i]
 
+#model parameters
+m<-contact_matrix(polymod, age.limits = age.categories, 
+                  symmetric = F, split=F,
+                  missing.participant.age = "remove", 
+                  missing.contact.age = "sample") 
 
-m<-contact_matrix(polymod, age.limits = age.categories, symmetric = T, split=T) # countries="United Kingdom",
 c <- m$matrix # number of contacts
 p <- 0.1 # probability of transmission given contact
-times <- 1:39 # time step is in weeks
+#https://www.medrxiv.org/content/10.1101/2020.03.03.20028423v3.full.pdf
+
+times <- 1:60 # time step is in weeks
 dur.inf <- 10 # in days
-mu <-1/30*( c(0.0001, 0.001, 0.03, 0.1))
-latent <- 10 # in days
-sdbreaks <- c(1, 20, 30, max(times))
-social.distancing <- c(1, 0.5, 1)
+death.rate <- 60
+mu <-(1/death.rate)*( c(0.00002, 0.00007, 0.0031, 0.00084, 0.00161, 0.00595, 0.0193, 0.0428, 0.078, 0.078) )
+#1. Public Health Ontario. COVID-19 Case Fatality, Case Identification, and Attack Rates in Ontario. 2020 May 20;5. 
+
+
+
+latent <- 4.6 # in days
+#social distancing params
+sdbreaks <- c(1, 10, 20,max(times))
+social.distancing <- c(0.5, 0.5, 0.5) #social distancing
+
+#vaccination
+efficacy<- 0.8
+prop.vacc <- 0.7
+rate <- 1/10
+
+rho <- efficacy*prop.vacc*rate
   
 theta <- list(dur.inf = dur.inf, 
               births = births, 
@@ -78,21 +114,64 @@ theta <- list(dur.inf = dur.inf,
               c = c, 
               p = p, 
               mu=mu, 
-              latent =latent)
+              latent =latent,
+              rho =rho
+              ) #combining parameters in list
 
-pop.init <- 1e6*(ages/sum(ages))
-init.inf <- 1
-rec.init <-0
+
+#initializing the model
+ont.pop <-read_csv("population.csv", col_names = F)
+
+ontpop <-c()
+for (j in 1:((nrow(ont.pop)-1)/2)){
+  ontpop[j] <- unlist(ont.pop[j,2] +ont.pop[j+1, 2])
+  
+  
+}
+pop.init <- ontpop
+
+init.sir <- read.csv("conposcovidloc.csv")
+
+
+
+sirs <-init.sir %>%
+  filter(Outcome1== "Not Resolved")%>%
+  group_by(Age_Group, Outcome1 )%>%
+  summarise(n= n())
+init.inf <- 10*unlist(sirs[,3])
+
+sirs <-init.sir %>%
+  filter(Outcome1== "Resolved")%>%
+  group_by(Age_Group, Outcome1 )%>%
+  summarise(n= n())
+
+rec.init <- 10*unlist(sirs[1:10, 3])
+
+
+sirs <-init.sir %>%
+  filter(Outcome1== "Fatal")%>%
+  group_by(Age_Group, Outcome1 )%>%
+  summarise(n= n())
+
+
+d.init <- c(0, unlist(sirs[,3]))
+
+hh <- read.csv("covidtesting.csv")
+Inc <- hh[nrow(hh), 5]
+
 yinit <- c(
-  S = pop.init - init.inf, 
-  E= rep(init.inf, n.i),
-  I = rep(0, n.i), 
-  R = rep(0, n.i),
-  Inc = rep(0, n.i),
-  D= rep(0, n.i)
+  S = ontpop - init.inf-rec.init, 
+  E= init.inf,
+  I = init.inf, 
+  R = rec.init,
+  Inc = rep(10, n.i),
+  D= d.init
 )
+#https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710000501
 
 
+
+#solving equations, storing values in traj data frame
 traj <- as.data.frame(ode(y=yinit, times=times, func=sir.model,
                           parms=theta, method="rk4"))
 
@@ -105,10 +184,27 @@ for (j in 2:nrow(traj)) {
   }
 }
 
-traj <- traj[1:k,] 
+traj <- traj[1:k,]
+
+#combining age groups
+new_vari <- str_c(rep(c("S", "E", "I", "R", "D", "Inc"), each= 3), rep(c("1", "2", "3"), 6) )
+ for (k in 1:6){
+   
+   traj [, 59+3*k] <- traj[,10*k-8 ]+traj[,10*k-7 ]+traj[,10*k-6 ]
+   traj [, 60+3*k] <- traj[,10*k-5 ]+traj[,10*k-4 ]+traj[,10*k-3 ]
+   traj [, 61+3*k] <- traj[,10*k-2 ]+traj[,10*k-1 ]+traj[,10*k ]+traj[, 10*k+1]
+ }
+
+
+
+traj2 <-traj[,c(1,62:79 )]
+colnames(traj2)<-c("time",new_vari)
+
+
+
 
 #Plot the model outputs:
-traj%>%
+traj2%>%
   mutate_at(vars(contains("inc")), function(x) x - lag(x)) %>%
   gather(key="group", value="values", -c(time), na.rm = T) %>%
   separate(group, into=c("metric", "index"), sep = "(?<=[a-zA-Z])\\s*(?=[0-9])") %>%
@@ -117,6 +213,7 @@ traj%>%
   facet_wrap(metric~., scales="free_y") +
   scale_color_brewer(type="qual", palette=2) +
   labs(x = "Time", y="Number of people", color = "Age group")
+
 
 
 
