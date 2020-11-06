@@ -41,10 +41,10 @@ if (times %in% sdbreaks[j]:sdbreaks[j+1]) {
   lambda <-  beta %*% (I/N)
   
   #By 10 age groups
-  dS <- -lambda*S + aging%*%S + births%*%N- rho*S
+  dS <- -lambda*S + aging%*%S + births%*%N- diag(rho)%*%S
   dE <- aging %*%E + lambda*S -sigma*E
   dI <- sigma*E - gamma*I + aging%*%I -mu%*%I
-  dR <- gamma*I + aging%*%R +rho*S
+  dR <- gamma*I + aging%*%R +diag(rho)%*%S
   dInc <- lambda*S
   dD <- mu%*%I
   
@@ -103,7 +103,7 @@ social.distancing <- c(0.5, 0.5, 0.5) #social distancing
 
 #vaccination
 efficacy<- 0.8
-prop.vacc <- 0.7
+prop.vacc <- rep(0.9, 10)
 rate <- 1/10
 
 rho <- efficacy*prop.vacc*rate
