@@ -3,6 +3,7 @@ library(tidyselect)
 library(deSolve)
 library(socialmixr)
 
+
 # Age structure model
 ##
 sir.model <- function (times, x, parms) { #SIR model equations
@@ -85,21 +86,22 @@ m<-contact_matrix(polymod, age.limits = age.categories,
                   missing.contact.age = "sample") 
 
 c <- m$matrix # number of contacts
-p <- 0.1 # probability of transmission given contact
+p <- 0.01 # probability of transmission given contact
 #https://www.medrxiv.org/content/10.1101/2020.03.03.20028423v3.full.pdf
 
 times <- 1:60 # time step is in weeks
+if (!vaccine){times <-1:39}
 dur.inf <- 10 # in days
-death.rate <- 60
-mu <-(1/death.rate)*( c(0.00002, 0.00007, 0.0031, 0.00084, 0.00161, 0.00595, 0.0193, 0.0428, 0.078, 0.078) )
+death.time <- 60 #in days
+mu <-(1/death.time)*( c(0.00002, 0.00007, 0.0031, 0.00084, 0.00161, 0.00595, 0.0193, 0.0428, 0.078, 0.078) )
 #1. Public Health Ontario. COVID-19 Case Fatality, Case Identification, and Attack Rates in Ontario. 2020 May 20;5. 
 
 
 
 latent <- 4.6 # in days
 #social distancing params
-sdbreaks <- c(1, 10, 20,max(times))
-social.distancing <- c(0.5, 0.5, 0.5) #social distancing
+sdbreaks <- c(1, 6, 26,max(times))
+social.distancing <- c(1, 0.1, 0.8) #social distancing
 
 #vaccination
 efficacy<- 0.8
@@ -107,7 +109,7 @@ prop.vacc <- rep(0.9, 10)
 rate <- 1/10
 
 rho <- efficacy*prop.vacc*rate
-  
+if (!vaccine){rho <- rep(0, 10)}
 theta <- list(dur.inf = dur.inf, 
               births = births, 
               aging = aging, 
@@ -117,6 +119,7 @@ theta <- list(dur.inf = dur.inf,
               latent =latent,
               rho =rho
               ) #combining parameters in list
+
 
 
 #initializing the model
@@ -160,7 +163,7 @@ hh <- read.csv("covidtesting.csv")
 Inc <- hh[nrow(hh), 5]
 
 yinit <- c(
-  S = ontpop - init.inf-rec.init, 
+  S = ontpop - init.inf-rec.init-d.init, 
   E= init.inf,
   I = init.inf, 
   R = rec.init,
@@ -169,6 +172,16 @@ yinit <- c(
 )
 #https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1710000501
 
+if (F){if (!vaccine){yinit <- c(
+  S= ontpop-1, 
+  E= rep(0, 10), 
+  I= rep(1,10),
+  R= rep(0,10),
+  Inc = rep(0, 10),
+  D= rep(0, 10)
+)}
+
+}
 
 
 #solving equations, storing values in traj data frame
