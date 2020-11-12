@@ -16,7 +16,7 @@ sir.model <- function (times, x, parms) { #SIR model equations
   Inc <-x[incindex]
   D <- x[dindex]
   
-  N <- S + I + R-D
+  N <- S +E+ I + R-D
   
   
   
@@ -39,15 +39,16 @@ if (times %in% sdbreaks[j]:sdbreaks[j+1]) {
   
   sigma <- 1/parms[["latent"]]
   
-  lambda <-  beta %*% (I/N)
+  lambda <-  beta %*% (I/N)#divide by N because of age -groups. freq vs. density dependent
+  #this is frequency dependent
   
   #By 10 age groups
   dS <- -lambda*S + aging%*%S + births%*%N- diag(rho)%*%S
   dE <- aging %*%E + lambda*S -sigma*E
-  dI <- sigma*E - gamma*I + aging%*%I -mu%*%I
+  dI <- sigma*E - gamma*I + aging%*%I -mu%*%I #gamma*i(1-ifr)
   dR <- gamma*I + aging%*%R +diag(rho)%*%S
   dInc <- lambda*S
-  dD <- mu%*%I
+  dD <- mu%*%I #gamma*I*ifr
   
   
 
@@ -66,6 +67,7 @@ n.i <- 10 # number of age groups
 sindex <- 1:n.i  #these indices help sort out what's saved where
 eindex <- seq(from=max(sindex)+1, by=1, length.out=n.i)
 iindex <- seq(from=max(eindex)+1, by=1, length.out=n.i)
+
 rindex <- seq(from=max(iindex)+1, by=1, length.out=n.i)
 incindex <- seq(from=max(rindex)+1, by=1, length.out=n.i)
 dindex <- seq(from=max(incindex)+1, by=1, length.out=n.i)
@@ -96,8 +98,8 @@ death.time <- 60 #in days
 mu <-(1/death.time)*( c(0.00002, 0.00007, 0.0031, 0.00084, 0.00161, 0.00595, 0.0193, 0.0428, 0.078, 0.078) )
 #1. Public Health Ontario. COVID-19 Case Fatality, Case Identification, and Attack Rates in Ontario. 2020 May 20;5. 
 
-
-
+#Keep everything in days.
+# cumulative  deaths 
 latent <- 4.6 # in days
 #social distancing params
 sdbreaks <- c(1, 6, 26,max(times))
@@ -107,6 +109,8 @@ social.distancing <- c(1, 0.1, 0.8) #social distancing
 efficacy<- 0.8
 prop.vacc <- rep(0.9, 10)
 rate <- 1/10
+#don't model the delay. Just model it as something that happens instantaneously.
+#proprotions instead of rates for death
 
 rho <- efficacy*prop.vacc*rate
 if (!vaccine){rho <- rep(0, 10)}
@@ -123,7 +127,10 @@ theta <- list(dur.inf = dur.inf,
 
 
 #initializing the model
-ont.pop <-read_csv("population.csv", col_names = F)
+ont.pop <-unlist(read_csv("population.csv", col_names = F)[,2])
+
+
+ont.pop <- c(sum(ont.pop[1:4]), sum(ont.pop[5:8]),sum(ont.pop[9:12]),sum(ont.pop[13:16]), sum(ont.pop[17:21]))
 
 ontpop <-c()
 for (j in 1:((nrow(ont.pop)-1)/2)){
