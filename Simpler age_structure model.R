@@ -7,7 +7,7 @@ library(socialmixr)
 #########################
 #### Age structure model
 #########################
-
+model <- function(props){
 sir.model <- function (times, x, parms) { #SIR model equations
   
   S <- x[sindex]
@@ -193,7 +193,7 @@ vaccinate <- function(props =rep(0.5, 4)){
 }
 
 
-vaccinate()
+vaccinate(props = props)
 ###########################################
 ####  Running Model
 ###########################################
@@ -220,7 +220,11 @@ for (j in 2:nrow(traj)) {
 }
 
 traj <- traj[1:k,]
+return(traj)
 
+}
+
+traj<- model(props = c(0.5, 0.5, 0.5, 0.5))
 traj %>%
   mutate_at(vars(contains("inc")), function(x) x - lag(x)) %>%
   gather(key="group", value="values", -c(time)) %>%
