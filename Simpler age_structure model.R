@@ -235,6 +235,12 @@ traj %>%
   scale_color_brewer(type="qual", palette=2) +
   labs(x = "Time", y="Number of people", color = "Age group")
 
+simulator<- function(props){
+  deaths <- unlist(model(props)[365, 18:21])
+  
+  deaths <-c(deaths, sum(deaths))
+  return(deaths)
+}
 
 
-
+deaths <-simulator(c(0.5, 0.5, 0.5, 0.5))
