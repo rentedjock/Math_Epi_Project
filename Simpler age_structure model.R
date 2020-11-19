@@ -7,6 +7,67 @@ library(socialmixr)
 #########################
 #### Age structure model
 #########################
+
+
+
+###########################################
+####  Starting Conditions
+###########################################
+
+#age group specific underestimation factors from ontario data
+under.estimate <- c(3.574562704, 3.581050923,4.37442076)
+
+
+#Regrouping function to regroup age groups from Ontario data
+regroup <- function(x){
+  x <- c(sum(x[1:3]),sum(x[4:6]),sum(x[7:10]) )
+  
+}
+
+
+
+####model Initializing values
+
+
+#Ontario population
+ont.pop <-unlist(read_csv("population.csv", col_names = F)[,2])
+
+
+ont.pop <- c(sum(ont.pop[1:6]),sum(ont.pop[7:12]),sum(ont.pop[13:21]) )
+
+
+#infected compartment
+init.sir <- read.csv("conposcovidloc.csv")
+
+
+sirs <-init.sir %>%
+  filter(Outcome1== "Not Resolved")%>%
+  group_by(Age_Group, Outcome1 )%>%
+  summarise(n= n())
+init.inf <- regroup(unlist(sirs[,3]))*under.estimate
+
+#Recovered compartment
+sirs <-init.sir %>%
+  filter(Outcome1== "Resolved")%>%
+  group_by(Age_Group, Outcome1 )%>%
+  summarise(n= n())
+
+rec.init <- regroup(unlist(sirs[1:10, 3]))*under.estimate
+
+#Death compartment
+sirs <-init.sir %>%
+  filter(Outcome1== "Fatal")%>%
+  group_by(Age_Group, Outcome1 )%>%
+  summarise(n= n())
+
+
+d.init <- regroup(c(0, unlist(sirs[,3])) )
+
+
+#Susceptible compartment
+init.s <- ont.pop- rec.init-d.init-init.inf
+
+
 model <- function(props, dose){
 sir.model <- function (times, x, parms) { #SIR model equations
   
@@ -112,58 +173,8 @@ theta <- list(dur.inf = dur.inf,
               p = p, 
               mu=mu)
 
-###########################################
-####  Starting Conditions
-###########################################
-
-#age group specific underestimation factors from ontario data
-under.estimate <- c(3.574562704, 3.581050923,4.37442076)
 
 
-#Regrouping function to regroup age groups from Ontario data
-regroup <- function(x){
-  x <- c(sum(x[1:3]),sum(x[4:6]),sum(x[7:10]) )
-  
-}
-
-
-#Ontario population
-ont.pop <-unlist(read_csv("population.csv", col_names = F)[,2])
-
-
-ont.pop <- c(sum(ont.pop[1:6]),sum(ont.pop[7:12]),sum(ont.pop[13:21]) )
-
-
-#infected compartment
-init.sir <- read.csv("conposcovidloc.csv")
-
-
-sirs <-init.sir %>%
-  filter(Outcome1== "Not Resolved")%>%
-  group_by(Age_Group, Outcome1 )%>%
-  summarise(n= n())
-init.inf <- regroup(unlist(sirs[,3]))*under.estimate
-
-#Recovered compartment
-sirs <-init.sir %>%
-  filter(Outcome1== "Resolved")%>%
-  group_by(Age_Group, Outcome1 )%>%
-  summarise(n= n())
-
-rec.init <- regroup(unlist(sirs[1:10, 3]))*under.estimate
-
-#Death compartment
-sirs <-init.sir %>%
-  filter(Outcome1== "Fatal")%>%
-  group_by(Age_Group, Outcome1 )%>%
-  summarise(n= n())
-
-
-d.init <- regroup(c(0, unlist(sirs[,3])) )
-
-
-#Susceptible compartment
-init.s <- ont.pop- rec.init-d.init-init.inf
 
 ###########################################
 ####  Shock Vaccinate
@@ -281,3 +292,16 @@ results[results[,6]==min(results[, 6], na.rm =T), 1:2]
 min(results[, 5], na.rm =T)
 min(results[, 4], na.rm =T)
 min(results[, 3], na.rm =T)
+library(plotly)
+
+ll <-results[, c(1, 2,6)] %>%
+  pivot_wider(names_from = V1, values_from = V6 )
+ll <-ll[1:100, ]
+rownames(ll) <-unlist( ll[, 1])
+ll <- ll[, -1]
+
+
+ll <- matrix(unlist(ll), nrow=100, ncol=101)
+p <-plot_ly( z= ~ll )%>% add_surface()
+ 
+p
