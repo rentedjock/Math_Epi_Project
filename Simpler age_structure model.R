@@ -16,7 +16,8 @@ library(plotly)
 ####  Starting Conditions
 ###########################################
 
-#age group specific underestimation factors from ontario data
+#age group specific underestimation factors from ontario data 
+#for each age-group
 under.estimate <- c(3.574562704, 3.581050923,4.37442076)
 #see associated excel file for data from PHO
 
@@ -70,8 +71,13 @@ d.init <- regroup(c(0, unlist(sirs[,3])) )
 #Susceptible compartment
 init.s <- ont.pop- rec.init-d.init-init.inf
 
-
+#this function models the trajectory of cOVID-19
+#given a fixed number of doses of vaccine
+# and how we divide them across age-groups
+#the props
 model <- function(props, dose){
+  
+  
 sir.model <- function (times, x, parms) { #SIR model equations
   
   S <- x[sindex]
@@ -93,7 +99,7 @@ sir.model <- function (times, x, parms) { #SIR model equations
   mu <- diag(parms[["mu"]])
   lambda <-  beta %*% (I/N)
   
-  #By 10 age groups
+  
   dS <- -lambda*S + aging%*%S + births%*%N
   dI <- lambda*S - gamma*I + aging%*%I - mu%*%I
   dR <- gamma*I + aging%*%R 
@@ -154,8 +160,8 @@ m<-contact_matrix(polymod, countries="United Kingdom", age.limits = age.categori
 c <- m$matrix # number of contacts
 
 
-p <- 0.01 # probability of transmission given contact
-#https://www.medrxiv.org/content/10.1101/2020.03.03.20028423v3.full.pdf
+p <- 0.03 # probability of transmission given contact
+#from https://nccid.ca/phac-seir-model-on-covid-19/
 
 times <- 1:365 # time step is in days
 
@@ -192,14 +198,14 @@ theta <- list(dur.inf = dur.inf,
   if ( sum(props) >1 ){ stop("Proportion can't be greater than 1")}
   
   for (j in seq_along(props)){
-    
-    init.s[j] <- init.s[j]- props[j]*dose
-    rec.init[j] <- rec.init[j] + dose*props[j]
+    #assuming 95% efficacy in preventing infection as well
+    init.s[j] <- init.s[j]- props[j]*dose*0.95
+    rec.init[j] <- rec.init[j] + dose*props[j]*0.95
     
   }
   
-  init.s[j+1] <- init.s[j+1]- (1-sum(props))*dose
-  rec.init[j+1] <- rec.init[j+1]+ (1-sum(props))*dose
+  init.s[j+1] <- init.s[j+1]- (1-sum(props))*dose*0.95
+  rec.init[j+1] <- rec.init[j+1]+ (1-sum(props))*dose*0.95
   
 
 ###########################################
@@ -267,7 +273,7 @@ deaths<- function(x){
   return(death)
 }
 
-#initializing data frame
+#initializing data frame to store results
 results <- data.frame()
 counter <-1
 
@@ -287,7 +293,7 @@ for ( i in seq_along(prop) ) {
     
     #calculating deaths in each age group for each set of proportions
     # fed into the model
-    h <- model(props = c(prop[i], prop2[j]), dose = 1e6)%>%
+    h <- model(props = c(prop[i], prop2[j]), dose = 3e6)%>%
       deaths()
     
     #storing the proportions in the data frame
@@ -301,17 +307,20 @@ for ( i in seq_along(prop) ) {
        results[counter, k+2] <- h[k]
      } 
     counter <- counter +1
-   print(counter)     
+   print(counter)   #to see progress  
   }
   
   
   
 }
 
-
+#storing results because 5151 iterations 
+#take a lot of time
+write.csv(results, "deaths.csv")
+ll<-read.csv("deaths.csv")[, -1]
 #converting the results dataframe 
 #to matrix format for plotting
-ll <-results[, c(1, 2,6)] %>%
+ll <-ll[, c(1, 2,6)] %>%
   pivot_wider(names_from = V1, values_from = V6 )
 ll <-ll[1:100, ]
 rownames(ll) <-unlist( ll[, 1])
@@ -324,3 +333,4 @@ ll <- matrix(unlist(ll), nrow=100, ncol=101)
 p <-plot_ly( z= ~ll )%>% add_surface()
  
 p
+
