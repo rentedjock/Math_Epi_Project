@@ -242,7 +242,19 @@ return(traj)
 #Model function returns the trajectory data frame for a given
 # number of doses and the given proportion of doses across age groups
 
+#graph labeller
+variable.names <- list(
+  'S' ="Susceptibles",
+  'I' ="Infecteds",
+  'R' ="Recovereds",
+  'Inc' ="Incidence",
+  'D' ="Deaths"
+)
+# code inspired from https://stackoverflow.com/questions/3472980/how-to-change-facet-labels
 
+graph_labeller <- function(variable, value)(
+  return(variable.names[value])
+)
 
 #ploting function
 plot_my_traj <- function(traj){
@@ -250,11 +262,16 @@ plot_my_traj <- function(traj){
     mutate_at(vars(contains("inc")), function(x) x - lag(x)) %>%
     gather(key="group", value="values", -c(time)) %>%
     separate(group, into=c("metric", "index"), sep = "(?<=[a-zA-Z])\\s*(?=[0-9])") %>%
+    mutate(metric= factor(metric, 
+           levels= c("S", "I", "R", "Inc", "D") ))%>%
     ggplot(aes(x=time, y=values, color=index)) +
     geom_line(lwd=1) +
-    facet_wrap(metric~., scales="free_y") +
-    scale_color_brewer(type="qual", palette=2) +
-    labs(x = "Time", y="Number of people", color = "Age group")
+    facet_wrap(metric~., scales="free_y", labeller = graph_labeller) +
+    scale_color_brewer(type="qual", palette=2,
+                       name= "Age Group", 
+                       labels= c("<30 years", "30-59 years", ">=60 years")) +
+    labs(x = "Time", y="Number of People")
+    
   }
 
 
@@ -329,8 +346,19 @@ ll <- ll[, -1]
 
 ll <- matrix(unlist(ll), nrow=100, ncol=101)
 
+Deaths <-ll
 #plotting
-p <-plot_ly( z= ~ll )%>% add_surface()
+p <-plot_ly( z= ~Deaths, colors= "YlOrRd")%>% 
+  add_surface()%>%
+  layout (
+    title ="Deaths by Vaccine Distribution Across Ages",
+   scene =list( xaxis =list(title="Young Age", tickvals= list(0, 20, 40, 60, 80)), 
+    yaxis = list(title = "Middle Age (30-60)"), 
+    zaxis = list(title = "Deaths"))
+  )
  
 p
 
+model(c(0, 1), 3e6)%>%plot_my_traj()
+model(c(1, 0), 3e6)%>%plot_my_traj()
+model(c(0, 0), 3e6)%>%plot_my_traj()
